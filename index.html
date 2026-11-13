@@ -50,8 +50,8 @@
 <dialog id="edd">
   <h3>Ubah lagu</h3>
   <div style="display:grid;gap:10px">
-    <input type="text" id="etitle" placeholder="Judul lagu" maxlength="120" aria-label="Judul lagu">
-    <input type="text" id="eartist" placeholder="Nama artis" maxlength="80" aria-label="Nama artis">
+    <label class="fld" for="etitle">Judul Lagu<input type="text" id="etitle" maxlength="120"></label>
+    <label class="fld" for="eartist">Penyanyi<input type="text" id="eartist" maxlength="80"></label>
   </div>
   <div class="dact"><button onclick="$('edd').close()">Batal</button><button class="btn" onclick="saveEdit()">Simpan</button></div>
 </dialog>
