@@ -52,6 +52,16 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:10px 16p
 .seek input{flex:1;accent-color:var(--ac)}
 #toast{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.show{opacity:1}
+dialog{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(460px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h3{margin:0 0 10px}
+#stg{max-height:45vh;overflow:auto;margin:10px 0}
+.srow{display:flex;gap:6px;align-items:center;margin:6px 0}
+.srow .sn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow input{width:150px;flex:none}
+input.bad{border-color:#e5736b!important}
+.mute{color:var(--mute)}
+.dact{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:640px){.body{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}aside button{width:auto;white-space:nowrap}}
 </style>
 </head>
@@ -78,13 +88,12 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:10px 16p
       <div class="bar">
         <h2 id="vt"></h2>
         <button id="delpl" hidden onclick="delPlaylist()">Hapus playlist</button>
-        <input type="text" id="artist" placeholder="Artis (opsional)">
-        <label class="btn" style="cursor:pointer">Unggah lagu<input type="file" id="file" accept="audio/*" multiple hidden></label>
+        <button class="btn" onclick="openUpload()">Unggah lagu</button>
       </div>
       <div id="list"></div>
     </main>
   </div>
-  <footer>
+  <footer id="pbar" hidden>
     <div id="np">Belum ada lagu diputar</div>
     <div class="seek"><span id="cur">0:00</span><input type="range" id="seek" min="0" max="0" step="1" value="0" aria-label="Posisi lagu"><span id="dur">0:00</span></div>
     <div class="ctl">
@@ -92,10 +101,16 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:10px 16p
       <button onclick="prev()" aria-label="Sebelumnya">⏮</button>
       <button class="go" id="pp" onclick="toggle()" aria-label="Putar atau jeda">▶</button>
       <button onclick="next()" aria-label="Berikutnya">⏭</button>
-      <button onclick="stopAll()" title="Berhenti" aria-label="Berhenti">⏹</button>
+      <button onclick="stopBtn()" title="Berhenti" aria-label="Berhenti">⏹</button>
     </div>
   </footer>
 </div>
+<dialog id="upd">
+  <h3>Unggah lagu</h3>
+  <label class="btn" style="cursor:pointer;display:inline-block">Pilih file<input type="file" id="pick" accept="audio/*" multiple hidden></label>
+  <div id="stg"></div>
+  <div class="dact"><button onclick="closeUpload(true)">Batal</button><button class="btn" id="go" onclick="doUpload()">Unggah</button></div>
+</dialog>
 <audio id="au"></audio>
 <div id="toast"></div>
 
@@ -172,6 +187,14 @@ async function start() {
   songs = s.data; playlists = p.data || []; plMap = {};
   (ps.data || []).forEach(r => (plMap[r.playlist_id] ??= new Set()).add(r.song_id));
   render();
+  restore();
+}
+async function restore() {
+  if (curId) return;
+  const { data } = await sb.from('player_state').select('*').maybeSingle();
+  if (!data?.song_id) return;
+  const i = songs.findIndex(s => s.id === data.song_id);
+  if (i >= 0) play(songs, i, data.position, false);
 }
 const visible = () => view === 'all' ? songs : view === 'fav' ? songs.filter(s => s.favorite) : songs.filter(s => plMap[view]?.has(s.id));
 
@@ -199,18 +222,21 @@ function render() {
 function setView(v) { view = v; render(); }
 
 /* ---------- Playback ---------- */
-async function play(list, i) {
+let lastSave = 0, pendingSeek = 0, urlAt = 0;
+async function play(list, i, startAt = 0, auto = true) {
   queue = list; idx = i;
   const s = queue[i]; if (!s) return;
   const { data, error } = await sb.storage.from('songs').createSignedUrl(s.file_path, 7200);
   if (error) return toast('Gagal memuat lagu: ' + error.message);
-  curId = s.id; au.src = data.signedUrl;
-  au.play().catch(() => {});
+  curId = s.id; urlAt = Date.now(); pendingSeek = startAt; au.src = data.signedUrl;
+  $('pbar').hidden = false;
+  if (auto) au.play().catch(() => {});
+  saveState(startAt);
   $('np').textContent = s.title + (s.artist ? ' — ' + s.artist : '');
   render();
 }
 function playFrom(i) { if (curId) hist.push(curId); play(visible(), i); }
-function toggle() { if (!au.src) { const l = visible(); if (l.length) play(l, shuffle ? Math.floor(Math.random() * l.length) : 0); return; } au.paused ? au.play() : au.pause(); }
+function toggle() { if (!au.src) { const l = visible(); if (l.length) play(l, shuffle ? Math.floor(Math.random() * l.length) : 0); return; } if (au.paused && Date.now() - urlAt > 5400000) return play(queue, idx, au.currentTime, true); au.paused ? au.play() : au.pause(); }
 function next() {
   if (!queue.length) return;
   if (curId) hist.push(curId);
@@ -228,17 +254,26 @@ function prev() {
   }
   play(queue, (idx - 1 + queue.length) % queue.length);
 }
-function stopAll(silent) { au.pause(); au.removeAttribute('src'); au.load(); curId = null; $('np').textContent = 'Belum ada lagu diputar'; $('seek').value = 0; $('cur').textContent = $('dur').textContent = '0:00'; if (!silent) render(); }
+function stopAll(silent) { $('pbar').hidden = true; pendingSeek = 0; au.pause(); au.removeAttribute('src'); au.load(); curId = null; $('np').textContent = 'Belum ada lagu diputar'; $('seek').value = 0; $('cur').textContent = $('dur').textContent = '0:00'; if (!silent) render(); }
+async function stopBtn() { stopAll(); await clearState(); }
+async function saveState(pos = au.currentTime) {
+  if (!user || !curId) return;
+  lastSave = Date.now();
+  await sb.from('player_state').upsert({ user_id: user.id, song_id: curId, position: Math.floor(pos || 0), updated_at: new Date().toISOString() });
+}
+async function clearState() { if (user) await sb.from('player_state').delete().eq('user_id', user.id); }
 function toggleShuffle() { shuffle = !shuffle; hist = []; $('shuf').classList.toggle('on', shuffle); toast(shuffle ? 'Acak aktif' : 'Acak mati'); }
 
 au.onended = next;
 au.onplay = () => $('pp').textContent = '⏸';
-au.onpause = () => $('pp').textContent = '▶';
-au.onloadedmetadata = () => { $('seek').max = Math.floor(au.duration) || 0; $('dur').textContent = fmt(au.duration); };
-au.ontimeupdate = () => { if (!seeking) { $('seek').value = au.currentTime; $('cur').textContent = fmt(au.currentTime); } };
+au.onpause = () => { $('pp').textContent = '▶'; if (!au.ended) saveState(); };
+au.onloadedmetadata = () => { $('seek').max = Math.floor(au.duration) || 0; $('dur').textContent = fmt(au.duration); if (pendingSeek) { au.currentTime = Math.min(pendingSeek, au.duration || pendingSeek); $('seek').value = pendingSeek; $('cur').textContent = fmt(pendingSeek); pendingSeek = 0; } };
+au.ontimeupdate = () => { if (!seeking) { $('seek').value = au.currentTime; $('cur').textContent = fmt(au.currentTime); } if (!au.paused && Date.now() - lastSave > 10000) saveState(); };
 au.onerror = () => { if (au.src) toast('Lagu tidak bisa diputar'); };
 $('seek').oninput = e => { seeking = true; $('cur').textContent = fmt(+e.target.value); };
-$('seek').onchange = e => { au.currentTime = +e.target.value; seeking = false; };
+$('seek').onchange = e => { au.currentTime = +e.target.value; seeking = false; saveState(); };
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
+addEventListener('pagehide', () => saveState());
 
 /* ---------- Favorit & playlist ---------- */
 async function toggleFav(id) {
@@ -274,21 +309,37 @@ async function rmFromPl(songId) {
 }
 
 /* ---------- Upload & hapus ---------- */
-$('file').onchange = async e => {
-  const files = [...e.target.files]; e.target.value = '';
-  const artist = $('artist').value.trim() || null;
-  for (const f of files) {
-    toast('Mengunggah ' + f.name + '…');
-    const safe = f.name.replace(/[^\w.\-]+/g, '_');
-    const path = `${user.id}/${Date.now()}-${safe}`;
+let staged = [];
+function openUpload() { renderStaged(); $('upd').showModal(); }
+function closeUpload(clear) { if (clear) staged = []; $('upd').close(); }
+$('pick').onchange = e => { [...e.target.files].forEach(f => staged.push({ f, artist: '' })); e.target.value = ''; renderStaged(); };
+function renderStaged() {
+  $('stg').innerHTML = staged.length ? staged.map((x, i) => `
+    <div class="srow"><div class="sn" title="${esc(x.f.name)}">${esc(x.f.name)}</div>
+      <input type="text" placeholder="Nama artis (wajib)" value="${esc(x.artist)}" oninput="staged[${i}].artist=this.value;this.classList.remove('bad')">
+      <button onclick="staged.splice(${i},1);renderStaged()" aria-label="Hapus dari daftar">✕</button></div>`).join('')
+    : '<p class="mute">Belum ada file dipilih.</p>';
+}
+async function doUpload() {
+  if (!staged.length) return toast('Pilih file dulu');
+  const inputs = [...document.querySelectorAll('#stg input')];
+  const bad = inputs.filter((el, i) => !staged[i].artist.trim());
+  if (bad.length) { bad.forEach(el => el.classList.add('bad')); bad[0].focus(); return toast('Nama artis wajib diisi untuk semua file'); }
+  $('go').disabled = true;
+  const items = [...staged], failed = [];
+  for (const [n, x] of items.entries()) {
+    $('go').textContent = `Mengunggah ${n + 1}/${items.length}…`;
+    const f = x.f, safe = f.name.replace(/[^\w.\-]+/g, '_'), path = `${user.id}/${Date.now()}-${safe}`;
     const up = await sb.storage.from('songs').upload(path, f, { contentType: f.type || 'audio/mpeg' });
-    if (up.error) { toast('Gagal unggah: ' + up.error.message); continue; }
-    const { data, error } = await sb.from('songs').insert({ title: f.name.replace(/\.[^.]+$/, ''), artist, file_path: path }).select().single();
-    if (error) { await sb.storage.from('songs').remove([path]); toast(error.message); continue; }
+    if (up.error) { toast('Gagal unggah: ' + up.error.message); failed.push(x); continue; }
+    const { data, error } = await sb.from('songs').insert({ title: f.name.replace(/\.[^.]+$/, ''), artist: x.artist.trim(), file_path: path }).select().single();
+    if (error) { await sb.storage.from('songs').remove([path]); toast(error.message); failed.push(x); continue; }
     songs.unshift(data); render();
   }
-  toast('Selesai');
-};
+  staged = failed; $('go').disabled = false; $('go').textContent = 'Unggah';
+  if (failed.length) { renderStaged(); toast(failed.length + ' file gagal diunggah'); }
+  else { $('upd').close(); toast('Selesai'); }
+}
 async function delSong(id) {
   const s = songs.find(x => x.id === id);
   if (!confirm(`Hapus "${s.title}" secara permanen?`)) return;
