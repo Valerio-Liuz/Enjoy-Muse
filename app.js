@@ -7,14 +7,14 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const au = $('au');
-
+ 
 let token = null, user = null, songs = [], playlists = [], plMap = {}, view = 'all';
 let queue = [], idx = -1, curId = null, shuffle = false, hist = [], seeking = false;
 let mode = 'login', recovering = location.hash.includes('type=recovery');
-
+ 
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 2500); }
 const fmt = t => isFinite(t) ? Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') : '0:00';
-
+ 
 /* ---------- Auth ---------- */
 function setMode(m) {
   mode = m; $('msg').textContent = '';
@@ -47,14 +47,14 @@ $('af').onsubmit = async e => {
   }
   if (r.error) $('msg').textContent = r.error.message; else touch();
 };
-
+ 
 sb.auth.onAuthStateChange((ev, session) => {
   user = session?.user ?? null; token = session?.access_token ?? null;
   if (ev === 'PASSWORD_RECOVERY' || (recovering && session)) { showAuth('reset'); return; }
   if (session) setTimeout(start, 0); else showAuth('login');
 });
 function showAuth(m) { $('app').hidden = true; $('auth').hidden = false; setMode(m); stopAll(true); }
-
+ 
 /* ---------- Data ---------- */
 async function start() {
   if (!user || recovering) return;
@@ -80,7 +80,7 @@ async function restore() {
   if (i >= 0) play(songs, i, data.position, false);
 }
 const visible = () => view === 'all' ? songs : view === 'fav' ? songs.filter(s => s.favorite) : songs.filter(s => plMap[view]?.has(s.id));
-
+ 
 function render() {
   $('nav').innerHTML =
     `<button class="${view === 'all' ? 'on' : ''}" onclick="setView('all')">Semua lagu</button>` +
@@ -104,7 +104,7 @@ function render() {
     : '<p style="color:var(--mute)">Belum ada lagu di sini. Unggah lagu atau tambahkan dari "Semua lagu".</p>';
 }
 function setView(v) { view = v; render(); }
-
+ 
 /* ---------- Playback ---------- */
 let lastSave = 0, pendingSeek = 0, urlAt = 0;
 async function play(list, i, startAt = 0, auto = true) {
@@ -156,7 +156,7 @@ function saveBeacon() {
 }
 async function clearState() { if (user) await sb.from('player_state').delete().eq('user_id', user.id); }
 function toggleShuffle() { shuffle = !shuffle; hist = []; $('shuf').classList.toggle('on', shuffle); toast(shuffle ? 'Acak aktif' : 'Acak mati'); }
-
+ 
 au.onended = next;
 au.onplay = () => $('pp').textContent = '⏸';
 au.onpause = () => { $('pp').textContent = '▶'; if (!au.ended) saveState(); };
@@ -167,7 +167,7 @@ $('seek').oninput = e => { seeking = true; $('cur').textContent = fmt(+e.target.
 $('seek').onchange = e => { au.currentTime = +e.target.value; seeking = false; saveState(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
 addEventListener('pagehide', () => { if (curId && user && token) saveBeacon(); au.pause(); });
-
+ 
 /* ---------- Favorit & playlist ---------- */
 async function toggleFav(id) {
   const s = songs.find(x => x.id === id), v = !s.favorite;
@@ -200,7 +200,7 @@ async function rmFromPl(songId) {
   if (error) return toast(error.message);
   plMap[view].delete(songId); render();
 }
-
+ 
 /* ---------- Upload & hapus ---------- */
 let staged = [];
 function openUpload() { renderStaged(); $('upd').showModal(); }
@@ -245,7 +245,7 @@ async function delSong(id) {
   if (curId === id) stopAll(true);
   render();
 }
-
+ 
 /* ---------- Ubah judul & artis ---------- */
 let editId = null;
 function openEdit(id) {
@@ -257,7 +257,7 @@ function openEdit(id) {
 async function saveEdit() {
   const title = $('etitle').value.trim(), artist = $('eartist').value.trim();
   $('etitle').classList.toggle('bad', !title); $('eartist').classList.toggle('bad', !artist);
-  if (!title || !artist) return toast('Judul dan nama artis wajib diisi');
+  if (!title || !artist) return toast('Judul Lagu dan Penyanyi wajib diisi');
   const { error } = await sb.from('songs').update({ title, artist }).eq('id', editId);
   if (error) return toast(error.message);
   const s = songs.find(x => x.id === editId); s.title = title; s.artist = artist;
@@ -265,7 +265,7 @@ async function saveEdit() {
   $('edd').close(); render();
 }
 ['etitle', 'eartist'].forEach(id => $(id).onkeydown = e => { if (e.key === 'Enter') saveEdit(); });
-
+ 
 /* ---------- Batas tidak aktif 5 jam ---------- */
 const IDLE_MS = 5 * 3600 * 1000, IDLE_KEY = 'musikku_last_active';
 let lastTouch = 0;
@@ -280,6 +280,6 @@ function checkIdle() {
 }
 setInterval(checkIdle, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkIdle(); });
-
+ 
 setMode('login');
 sb.auth.getSession().then(({ data }) => { if (!data.session) showAuth(recovering ? 'login' : 'login'); });
