@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Enjoy Muse</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#13222c;--panel:#1b2f3c;--line:#2c4555;--tx:#e8eee9;--mute:#8fa5b0;--ac:#f0b34a;--ac2:#3a2a05}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--tx);font:15px/1.4 "Bricolage Grotesque",system-ui,sans-serif}
+button,select,input{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:6px 8px;border-radius:8px}
+button:hover{background:var(--line)}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+[hidden]{display:none!important}
+input[type=text],input[type=email],input[type=password]{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--line);border-radius:8px}
+.btn{background:var(--ac);color:var(--ac2);font-weight:600;padding:10px 16px;border-radius:8px}
+.btn:hover{background:#f6c56e}
+a.lnk{color:var(--ac);cursor:pointer;text-decoration:underline}
+#auth{min-height:100%;display:grid;place-items:center;padding:20px}
+#auth form{width:min(360px,100%);display:grid;gap:12px}
+#auth h1{font-size:34px;font-weight:800;margin:0 0 4px}
+#msg{color:var(--mute);min-height:1.4em}
+#app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
+header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+header b{font-size:20px;font-weight:800}
+.body{display:grid;grid-template-columns:220px 1fr;min-height:0}
+aside{border-right:1px solid var(--line);padding:12px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+aside button{text-align:left;width:100%}
+aside button.on{background:var(--line);color:var(--ac)}
+main{overflow:auto;padding:16px}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.bar h2{margin:0;font-size:22px;flex:1}
+.bar input[type=text]{width:150px}
+.row{display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:8px;border-bottom:1px solid var(--line)}
+.row.on{background:var(--panel)}
+.row.on b{color:var(--ac)}
+.row .t{flex:1;min-width:0;cursor:pointer}
+.row b,.row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{color:var(--mute)}
+.row select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:4px;width:58px}
+.fav{color:var(--ac)}
+footer{background:var(--panel);border-top:1px solid var(--line);padding:10px 16px;display:grid;gap:6px}
+#np{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl{display:flex;justify-content:center;gap:8px;align-items:center}
+.ctl button{font-size:20px}
+.ctl .go{background:var(--ac);color:var(--ac2);width:46px;height:46px;border-radius:50%}
+#shuf.on{color:var(--ac)}
+.seek{display:flex;gap:10px;align-items:center;color:var(--mute);font-size:13px}
+.seek input{flex:1;accent-color:var(--ac)}
+#toast{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
+@media(max-width:640px){.body{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}aside button{width:auto;white-space:nowrap}}
+</style>
+</head>
+<body>
+
+<div id="auth" hidden>
+  <form id="af">
+    <h1>Enjoy Muse</h1>
+    <div id="atitle" style="font-weight:600"></div>
+    <input type="text" id="un" placeholder="Username (3–20 karakter)" minlength="3" maxlength="20" autocomplete="username" hidden>
+    <input type="email" id="em" placeholder="Email" autocomplete="email" required>
+    <input type="password" id="pw" placeholder="Password (min. 6 karakter)" autocomplete="current-password" minlength="6">
+    <button class="btn" id="abtn"></button>
+    <div id="msg"></div>
+    <div id="alinks"></div>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header><b>Enjoy Muse</b><div><span id="hello" style="color:var(--mute);margin-right:8px"></span><button onclick="sb.auth.signOut()">Keluar</button></div></header>
+  <div class="body">
+    <aside id="nav"></aside>
+    <main>
+      <div class="bar">
+        <h2 id="vt"></h2>
+        <button id="delpl" hidden onclick="delPlaylist()">Hapus playlist</button>
+        <input type="text" id="artist" placeholder="Artis (opsional)">
+        <label class="btn" style="cursor:pointer">Unggah lagu<input type="file" id="file" accept="audio/*" multiple hidden></label>
+      </div>
+      <div id="list"></div>
+    </main>
+  </div>
+  <footer>
+    <div id="np">Belum ada lagu diputar</div>
+    <div class="seek"><span id="cur">0:00</span><input type="range" id="seek" min="0" max="0" step="1" value="0" aria-label="Posisi lagu"><span id="dur">0:00</span></div>
+    <div class="ctl">
+      <button id="shuf" onclick="toggleShuffle()" title="Acak" aria-label="Acak">🔀</button>
+      <button onclick="prev()" aria-label="Sebelumnya">⏮</button>
+      <button class="go" id="pp" onclick="toggle()" aria-label="Putar atau jeda">▶</button>
+      <button onclick="next()" aria-label="Berikutnya">⏭</button>
+      <button onclick="stopAll()" title="Berhenti" aria-label="Berhenti">⏹</button>
+    </div>
+  </footer>
+</div>
+<audio id="au"></audio>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+/* ====== ISI DENGAN DATA PROYEK SUPABASE KAMU ====== */
+const SUPABASE_URL = 'https://ptehoxephbznnrybdrkv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0ZWhveGVwaGJ6bm5yeWJkcmt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1MzM1MTMsImV4cCI6MjExMDEwOTUxM30.nFkRzUV59kcy-jvgVG8nqvXHytqIzQIoFrLfUQT92DM';
+/* ================================================== */
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const au = $('au');
+
+let user = null, songs = [], playlists = [], plMap = {}, view = 'all';
+let queue = [], idx = -1, curId = null, shuffle = false, hist = [], seeking = false;
+let mode = 'login', recovering = location.hash.includes('type=recovery');
+
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 2500); }
+const fmt = t => isFinite(t) ? Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') : '0:00';
+
+/* ---------- Auth ---------- */
+function setMode(m) {
+  mode = m; $('msg').textContent = '';
+  const T = { login: ['Masuk ke akunmu', 'Masuk'], signup: ['Buat akun baru', 'Buat akun'], forgot: ['Kami kirim tautan reset ke email-mu', 'Kirim tautan reset'], reset: ['Buat password baru', 'Simpan password baru'] }[m];
+  $('atitle').textContent = T[0]; $('abtn').textContent = T[1];
+  $('un').hidden = m !== 'signup'; $('un').required = m === 'signup';
+  $('em').hidden = m === 'reset'; $('em').required = m !== 'reset';
+  $('pw').hidden = m === 'forgot'; $('pw').required = m !== 'forgot';
+  $('pw').placeholder = m === 'reset' ? 'Password baru (min. 6 karakter)' : 'Password (min. 6 karakter)';
+  $('alinks').innerHTML = m === 'login'
+    ? '<a class="lnk" onclick="setMode(\'signup\')">Buat akun</a> &nbsp; <a class="lnk" onclick="setMode(\'forgot\')">Lupa password?</a>'
+    : m === 'reset' ? '' : '<a class="lnk" onclick="setMode(\'login\')">Kembali ke halaman masuk</a>';
+}
+$('af').onsubmit = async e => {
+  e.preventDefault();
+  const email = $('em').value.trim(), password = $('pw').value;
+  const redirectTo = location.origin + location.pathname;
+  $('msg').textContent = 'Memproses…';
+  let r;
+  if (mode === 'login') r = await sb.auth.signInWithPassword({ email, password });
+  else if (mode === 'signup') {
+    r = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo, data: { username: $('un').value.trim() } } });
+    if (!r.error && !r.data.session) { $('msg').textContent = 'Akun dibuat. Cek email untuk konfirmasi, lalu masuk.'; return; }
+  } else if (mode === 'forgot') {
+    r = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+    if (!r.error) { $('msg').textContent = 'Tautan reset sudah dikirim. Cek email-mu.'; return; }
+  } else {
+    r = await sb.auth.updateUser({ password });
+    if (!r.error) { recovering = false; history.replaceState(null, '', location.pathname); toast('Password diperbarui'); start(); return; }
+  }
+  if (r.error) $('msg').textContent = r.error.message;
+};
+
+sb.auth.onAuthStateChange((ev, session) => {
+  user = session?.user ?? null;
+  if (ev === 'PASSWORD_RECOVERY' || (recovering && session)) { showAuth('reset'); return; }
+  if (session) setTimeout(start, 0); else showAuth('login');
+});
+function showAuth(m) { $('app').hidden = true; $('auth').hidden = false; setMode(m); stopAll(true); }
+
+/* ---------- Data ---------- */
+async function start() {
+  if (!user || recovering) return;
+  $('auth').hidden = true; $('app').hidden = false;
+  $('hello').textContent = 'Halo, ' + (user.user_metadata?.username || user.email);
+  const [s, p, ps] = await Promise.all([
+    sb.from('songs').select('*').order('created_at', { ascending: false }),
+    sb.from('playlists').select('*').order('created_at'),
+    sb.from('playlist_songs').select('*')
+  ]);
+  if (s.error) return toast(s.error.message);
+  songs = s.data; playlists = p.data || []; plMap = {};
+  (ps.data || []).forEach(r => (plMap[r.playlist_id] ??= new Set()).add(r.song_id));
+  render();
+}
+const visible = () => view === 'all' ? songs : view === 'fav' ? songs.filter(s => s.favorite) : songs.filter(s => plMap[view]?.has(s.id));
+
+function render() {
+  $('nav').innerHTML =
+    `<button class="${view === 'all' ? 'on' : ''}" onclick="setView('all')">Semua lagu</button>` +
+    `<button class="${view === 'fav' ? 'on' : ''}" onclick="setView('fav')">♥ Favorit</button>` +
+    playlists.map(p => `<button class="${view === p.id ? 'on' : ''}" onclick="setView('${p.id}')">${esc(p.name)}</button>`).join('') +
+    `<button onclick="newPlaylist()">＋ Playlist baru</button>`;
+  const pl = playlists.find(p => p.id === view);
+  $('vt').textContent = view === 'all' ? 'Semua lagu' : view === 'fav' ? 'Favorit' : pl?.name || '';
+  $('delpl').hidden = !pl;
+  const list = visible();
+  const opts = '<option value="">＋</option>' + playlists.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('list').innerHTML = list.length ? list.map((s, i) => `
+    <div class="row ${s.id === curId ? 'on' : ''}">
+      <div class="t" onclick="playFrom(${i})"><b>${esc(s.title)}</b><small>${esc(s.artist || 'Artis tidak diketahui')}</small></div>
+      <button class="fav" onclick="toggleFav('${s.id}')" aria-label="Favorit">${s.favorite ? '♥' : '♡'}</button>
+      ${playlists.length ? `<select onchange="addToPl('${s.id}',this)" aria-label="Tambah ke playlist">${opts}</select>` : ''}
+      ${pl ? `<button onclick="rmFromPl('${s.id}')" title="Keluarkan dari playlist" aria-label="Keluarkan dari playlist">−</button>` : ''}
+      <button onclick="delSong('${s.id}')" title="Hapus lagu" aria-label="Hapus lagu">🗑</button>
+    </div>`).join('')
+    : '<p style="color:var(--mute)">Belum ada lagu di sini. Unggah lagu atau tambahkan dari "Semua lagu".</p>';
+}
+function setView(v) { view = v; render(); }
+
+/* ---------- Playback ---------- */
+async function play(list, i) {
+  queue = list; idx = i;
+  const s = queue[i]; if (!s) return;
+  const { data, error } = await sb.storage.from('songs').createSignedUrl(s.file_path, 7200);
+  if (error) return toast('Gagal memuat lagu: ' + error.message);
+  curId = s.id; au.src = data.signedUrl;
+  au.play().catch(() => {});
+  $('np').textContent = s.title + (s.artist ? ' — ' + s.artist : '');
+  render();
+}
+function playFrom(i) { if (curId) hist.push(curId); play(visible(), i); }
+function toggle() { if (!au.src) { const l = visible(); if (l.length) play(l, shuffle ? Math.floor(Math.random() * l.length) : 0); return; } au.paused ? au.play() : au.pause(); }
+function next() {
+  if (!queue.length) return;
+  if (curId) hist.push(curId);
+  let n;
+  if (shuffle && queue.length > 1) { do { n = Math.floor(Math.random() * queue.length); } while (n === idx); }
+  else n = (idx + 1) % queue.length;
+  play(queue, n);
+}
+function prev() {
+  if (!queue.length) return;
+  if (au.currentTime > 3) { au.currentTime = 0; return; }
+  if (shuffle && hist.length) {
+    const id = hist.pop(), n = queue.findIndex(s => s.id === id);
+    if (n >= 0) return play(queue, n);
+  }
+  play(queue, (idx - 1 + queue.length) % queue.length);
+}
+function stopAll(silent) { au.pause(); au.removeAttribute('src'); au.load(); curId = null; $('np').textContent = 'Belum ada lagu diputar'; $('seek').value = 0; $('cur').textContent = $('dur').textContent = '0:00'; if (!silent) render(); }
+function toggleShuffle() { shuffle = !shuffle; hist = []; $('shuf').classList.toggle('on', shuffle); toast(shuffle ? 'Acak aktif' : 'Acak mati'); }
+
+au.onended = next;
+au.onplay = () => $('pp').textContent = '⏸';
+au.onpause = () => $('pp').textContent = '▶';
+au.onloadedmetadata = () => { $('seek').max = Math.floor(au.duration) || 0; $('dur').textContent = fmt(au.duration); };
+au.ontimeupdate = () => { if (!seeking) { $('seek').value = au.currentTime; $('cur').textContent = fmt(au.currentTime); } };
+au.onerror = () => { if (au.src) toast('Lagu tidak bisa diputar'); };
+$('seek').oninput = e => { seeking = true; $('cur').textContent = fmt(+e.target.value); };
+$('seek').onchange = e => { au.currentTime = +e.target.value; seeking = false; };
+
+/* ---------- Favorit & playlist ---------- */
+async function toggleFav(id) {
+  const s = songs.find(x => x.id === id), v = !s.favorite;
+  const { error } = await sb.from('songs').update({ favorite: v }).eq('id', id);
+  if (error) return toast(error.message);
+  s.favorite = v; render();
+}
+async function newPlaylist() {
+  const name = prompt('Nama playlist baru:'); if (!name?.trim()) return;
+  const { data, error } = await sb.from('playlists').insert({ name: name.trim() }).select().single();
+  if (error) return toast(error.message);
+  playlists.push(data); view = data.id; render();
+}
+async function delPlaylist() {
+  const p = playlists.find(x => x.id === view);
+  if (!p || !confirm(`Hapus playlist "${p.name}"? Lagunya tidak ikut terhapus.`)) return;
+  const { error } = await sb.from('playlists').delete().eq('id', p.id);
+  if (error) return toast(error.message);
+  playlists = playlists.filter(x => x.id !== p.id); delete plMap[p.id]; view = 'all'; render();
+}
+async function addToPl(songId, sel) {
+  const pid = sel.value; sel.value = ''; if (!pid) return;
+  const { error } = await sb.from('playlist_songs').insert({ playlist_id: pid, song_id: songId });
+  if (error && error.code !== '23505') return toast(error.message);
+  (plMap[pid] ??= new Set()).add(songId);
+  toast('Ditambahkan ke ' + playlists.find(p => p.id === pid).name);
+}
+async function rmFromPl(songId) {
+  const { error } = await sb.from('playlist_songs').delete().eq('playlist_id', view).eq('song_id', songId);
+  if (error) return toast(error.message);
+  plMap[view].delete(songId); render();
+}
+
+/* ---------- Upload & hapus ---------- */
+$('file').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  const artist = $('artist').value.trim() || null;
+  for (const f of files) {
+    toast('Mengunggah ' + f.name + '…');
+    const safe = f.name.replace(/[^\w.\-]+/g, '_');
+    const path = `${user.id}/${Date.now()}-${safe}`;
+    const up = await sb.storage.from('songs').upload(path, f, { contentType: f.type || 'audio/mpeg' });
+    if (up.error) { toast('Gagal unggah: ' + up.error.message); continue; }
+    const { data, error } = await sb.from('songs').insert({ title: f.name.replace(/\.[^.]+$/, ''), artist, file_path: path }).select().single();
+    if (error) { await sb.storage.from('songs').remove([path]); toast(error.message); continue; }
+    songs.unshift(data); render();
+  }
+  toast('Selesai');
+};
+async function delSong(id) {
+  const s = songs.find(x => x.id === id);
+  if (!confirm(`Hapus "${s.title}" secara permanen?`)) return;
+  const r1 = await sb.storage.from('songs').remove([s.file_path]);
+  if (r1.error) return toast(r1.error.message);
+  const { error } = await sb.from('songs').delete().eq('id', id);
+  if (error) return toast(error.message);
+  songs = songs.filter(x => x.id !== id);
+  Object.values(plMap).forEach(set => set.delete(id));
+  if (curId === id) stopAll(true);
+  render();
+}
+
+setMode('login');
+sb.auth.getSession().then(({ data }) => { if (!data.session) showAuth(recovering ? 'login' : 'login'); });
+</script>
+</body>
+</html>
