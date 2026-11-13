@@ -53,7 +53,6 @@ dialog h3{margin:0 0 10px}
 .srow input{width:150px;flex:none}
 input.bad{border-color:#e5736b!important}
 .mute{color:var(--mute)}
-.fld{display:grid;gap:4px;font-size:13px;color:var(--mute)}
 .fld input{color:var(--tx);font-size:15px}
 .dact{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:640px){.body{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}aside button{width:auto;white-space:nowrap}}
