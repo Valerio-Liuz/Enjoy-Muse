@@ -7,14 +7,14 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const au = $('au');
- 
+
 let token = null, user = null, songs = [], playlists = [], plMap = {}, view = 'all';
-let queue = [], idx = -1, curId = null, shuffle = false, hist = [], seeking = false;
+let queueView = 'all', queue = [], idx = -1, curId = null, shuffle = false, hist = [], seeking = false;
 let mode = 'login', recovering = location.hash.includes('type=recovery');
- 
+
 function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 2500); }
 const fmt = t => isFinite(t) ? Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') : '0:00';
- 
+
 /* ---------- Auth ---------- */
 function setMode(m) {
   mode = m; $('msg').textContent = '';
@@ -47,14 +47,14 @@ $('af').onsubmit = async e => {
   }
   if (r.error) $('msg').textContent = r.error.message; else touch();
 };
- 
+
 sb.auth.onAuthStateChange((ev, session) => {
   user = session?.user ?? null; token = session?.access_token ?? null;
   if (ev === 'PASSWORD_RECOVERY' || (recovering && session)) { showAuth('reset'); return; }
   if (session) setTimeout(start, 0); else showAuth('login');
 });
 function showAuth(m) { $('app').hidden = true; $('auth').hidden = false; setMode(m); stopAll(true); }
- 
+
 /* ---------- Data ---------- */
 async function start() {
   if (!user || recovering) return;
@@ -76,35 +76,42 @@ async function restore() {
   if (curId) return;
   const { data } = await sb.from('player_state').select('*').maybeSingle();
   if (!data?.song_id) return;
-  const i = songs.findIndex(s => s.id === data.song_id);
-  if (i >= 0) play(songs, i, data.position, false);
+  let v = data.view || 'all', list = listFor(v), i = list.findIndex(s => s.id === data.song_id);
+  if (i < 0) { v = 'all'; list = songs; i = list.findIndex(s => s.id === data.song_id); }  // tab asal sudah tidak memuat lagu ini
+  if (i >= 0) { queueView = v; play(list, i, data.position, false); }
 }
-const visible = () => view === 'all' ? songs : view === 'fav' ? songs.filter(s => s.favorite) : songs.filter(s => plMap[view]?.has(s.id));
- 
+const norm = s => String(s ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+const keyOf = (title, artist) => norm(title) + '|' + norm(artist);
+const findDup = (title, artist, exceptId) => songs.find(s => s.id !== exceptId && keyOf(s.title, s.artist) === keyOf(title, artist));
+const listFor = v => v === 'all' ? songs : v === 'fav' ? songs.filter(s => s.favorite) : songs.filter(s => plMap[v]?.has(s.id));
+const visible = () => listFor(view);
+
 function render() {
   $('nav').innerHTML =
-    `<button class="${view === 'all' ? 'on' : ''}" onclick="setView('all')">Semua lagu</button>` +
-    `<button class="${view === 'fav' ? 'on' : ''}" onclick="setView('fav')">♥ Favorit</button>` +
-    playlists.map(p => `<button class="${view === p.id ? 'on' : ''}" onclick="setView('${p.id}')">${esc(p.name)}</button>`).join('') +
+    `<button class="${view === 'all' ? 'on' : ''}" onclick="setView('all')"><span>Semua lagu</span><span class="cnt">${songs.length}</span></button>` +
+    `<button class="${view === 'fav' ? 'on' : ''}" onclick="setView('fav')"><span>♥ Favorit</span><span class="cnt">${songs.filter(s => s.favorite).length}</span></button>` +
+    playlists.map(p => `<button class="${view === p.id ? 'on' : ''}" onclick="setView('${p.id}')"><span>${esc(p.name)}</span><span class="cnt">${plMap[p.id]?.size || 0}</span></button>`).join('') +
     `<button onclick="newPlaylist()">＋ Playlist baru</button>`;
   const pl = playlists.find(p => p.id === view);
   $('vt').textContent = view === 'all' ? 'Semua lagu' : view === 'fav' ? 'Favorit' : pl?.name || '';
   $('delpl').hidden = !pl;
   const list = visible();
-  const opts = '<option value="">＋</option>' + playlists.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('addsong').hidden = !pl; $('upbtn').hidden = view !== 'all';
+  const optsFor = s => '<option value="">＋</option>' + playlists.map(p => plMap[p.id]?.has(s.id)
+    ? `<option value="${p.id}" disabled>✓ ${esc(p.name)}</option>` : `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   $('list').innerHTML = list.length ? list.map((s, i) => `
     <div class="row ${s.id === curId ? 'on' : ''}">
       <div class="t" onclick="playFrom(${i})"><b>${esc(s.title)}</b><small>${esc(s.artist || 'Artis tidak diketahui')}</small></div>
       <button class="fav" onclick="toggleFav('${s.id}')" aria-label="Favorit">${s.favorite ? '♥' : '♡'}</button>
-      ${playlists.length ? `<select onchange="addToPl('${s.id}',this)" aria-label="Tambah ke playlist">${opts}</select>` : ''}
+      ${playlists.length ? `<select onchange="addToPl('${s.id}',this)" aria-label="Tambah ke playlist">${optsFor(s)}</select>` : ''}
       ${pl ? `<button onclick="rmFromPl('${s.id}')" title="Keluarkan dari playlist" aria-label="Keluarkan dari playlist">−</button>` : ''}
       <button onclick="openEdit('${s.id}')" title="Ubah judul dan artis" aria-label="Ubah judul dan artis">✎</button>
-      <button onclick="delSong('${s.id}')" title="Hapus lagu" aria-label="Hapus lagu">🗑</button>
+      ${view === 'all' ? `<button onclick="delSong('${s.id}')" title="Hapus lagu" aria-label="Hapus lagu">🗑</button>` : ''}
     </div>`).join('')
     : '<p style="color:var(--mute)">Belum ada lagu di sini. Unggah lagu atau tambahkan dari "Semua lagu".</p>';
 }
 function setView(v) { view = v; render(); }
- 
+
 /* ---------- Playback ---------- */
 let lastSave = 0, pendingSeek = 0, urlAt = 0;
 async function play(list, i, startAt = 0, auto = true) {
@@ -119,8 +126,8 @@ async function play(list, i, startAt = 0, auto = true) {
   $('np').textContent = s.title + (s.artist ? ' — ' + s.artist : '');
   render();
 }
-function playFrom(i) { if (curId) hist.push(curId); play(visible(), i); }
-function toggle() { if (!au.src) { const l = visible(); if (l.length) play(l, shuffle ? Math.floor(Math.random() * l.length) : 0); return; } if (au.paused && Date.now() - urlAt > 5400000) return play(queue, idx, au.currentTime, true); au.paused ? au.play() : au.pause(); }
+function playFrom(i) { if (curId) hist.push(curId); queueView = view; play(visible(), i); }
+function toggle() { if (!au.src) { const l = visible(); queueView = view; if (l.length) play(l, shuffle ? Math.floor(Math.random() * l.length) : 0); return; } if (au.paused && Date.now() - urlAt > 5400000) return play(queue, idx, au.currentTime, true); au.paused ? au.play() : au.pause(); }
 function next() {
   if (!queue.length) return;
   if (curId) hist.push(curId);
@@ -143,20 +150,20 @@ async function stopBtn() { stopAll(); await clearState(); }
 async function saveState(pos = au.currentTime) {
   if (!user || !curId) return;
   lastSave = Date.now();
-  await sb.from('player_state').upsert({ user_id: user.id, song_id: curId, position: Math.floor(pos || 0), updated_at: new Date().toISOString() });
+  await sb.from('player_state').upsert({ user_id: user.id, song_id: curId, position: Math.floor(pos || 0), view: queueView, updated_at: new Date().toISOString() });
 }
 function saveBeacon() {
   try {
     fetch(SUPABASE_URL + '/rest/v1/player_state?on_conflict=user_id', {
       method: 'POST', keepalive: true,
       headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ user_id: user.id, song_id: curId, position: Math.floor(au.currentTime || 0), updated_at: new Date().toISOString() })
+      body: JSON.stringify({ user_id: user.id, song_id: curId, position: Math.floor(au.currentTime || 0), view: queueView, updated_at: new Date().toISOString() })
     });
   } catch {}
 }
 async function clearState() { if (user) await sb.from('player_state').delete().eq('user_id', user.id); }
 function toggleShuffle() { shuffle = !shuffle; hist = []; $('shuf').classList.toggle('on', shuffle); toast(shuffle ? 'Acak aktif' : 'Acak mati'); }
- 
+
 au.onended = next;
 au.onplay = () => $('pp').textContent = '⏸';
 au.onpause = () => { $('pp').textContent = '▶'; if (!au.ended) saveState(); };
@@ -167,7 +174,7 @@ $('seek').oninput = e => { seeking = true; $('cur').textContent = fmt(+e.target.
 $('seek').onchange = e => { au.currentTime = +e.target.value; seeking = false; saveState(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
 addEventListener('pagehide', () => { if (curId && user && token) saveBeacon(); au.pause(); });
- 
+
 /* ---------- Favorit & playlist ---------- */
 async function toggleFav(id) {
   const s = songs.find(x => x.id === id), v = !s.favorite;
@@ -190,27 +197,42 @@ async function delPlaylist() {
 }
 async function addToPl(songId, sel) {
   const pid = sel.value; sel.value = ''; if (!pid) return;
+  const pname = playlists.find(p => p.id === pid)?.name;
+  if (plMap[pid]?.has(songId)) return toast('Lagu ini sudah ada di playlist ' + pname);
   const { error } = await sb.from('playlist_songs').insert({ playlist_id: pid, song_id: songId });
   if (error && error.code !== '23505') return toast(error.message);
   (plMap[pid] ??= new Set()).add(songId);
-  toast('Ditambahkan ke ' + playlists.find(p => p.id === pid).name);
+  toast(error ? 'Lagu ini sudah ada di playlist ' + pname : 'Ditambahkan ke ' + pname);
+  render();
 }
 async function rmFromPl(songId) {
   const { error } = await sb.from('playlist_songs').delete().eq('playlist_id', view).eq('song_id', songId);
   if (error) return toast(error.message);
   plMap[view].delete(songId); render();
 }
- 
+
 /* ---------- Upload & hapus ---------- */
 let staged = [];
 function openUpload() { renderStaged(); $('upd').showModal(); }
 function closeUpload(clear) { if (clear) staged = []; $('upd').close(); }
 $('pick').onchange = e => { [...e.target.files].forEach(f => staged.push({ f, artist: '' })); e.target.value = ''; renderStaged(); };
+function dupStatus() {
+  const seen = new Set();
+  return staged.map(x => {
+    if (!x.artist.trim()) return null;
+    const title = x.f.name.replace(/\.[^.]+$/, ''), k = keyOf(title, x.artist);
+    if (findDup(title, x.artist)) return 'Sudah ada di perpustakaan';
+    if (seen.has(k)) return 'Duplikat di daftar ini';
+    seen.add(k); return null;
+  });
+}
 function renderStaged() {
+  const dups = dupStatus();
   $('stg').innerHTML = staged.length ? staged.map((x, i) => `
-    <div class="srow"><div class="sn" title="${esc(x.f.name)}">${esc(x.f.name)}</div>
+    <div class="sitem"><div class="srow"><div class="sn" title="${esc(x.f.name)}">${esc(x.f.name)}</div>
       <input type="text" placeholder="Nama artis (wajib)" value="${esc(x.artist)}" oninput="staged[${i}].artist=this.value;this.classList.remove('bad')">
-      <button onclick="staged.splice(${i},1);renderStaged()" aria-label="Hapus dari daftar">✕</button></div>`).join('')
+      <button onclick="staged.splice(${i},1);renderStaged()" aria-label="Hapus dari daftar">✕</button></div>
+      ${dups[i] ? `<div class="dup">${dups[i]} — akan dilewati</div>` : ''}</div>`).join('')
     : '<p class="mute">Belum ada file dipilih.</p>';
 }
 async function doUpload() {
@@ -218,8 +240,10 @@ async function doUpload() {
   const inputs = [...document.querySelectorAll('#stg input')];
   const bad = inputs.filter((el, i) => !staged[i].artist.trim());
   if (bad.length) { bad.forEach(el => el.classList.add('bad')); bad[0].focus(); return toast('Nama artis wajib diisi untuk semua file'); }
+  const dups = dupStatus(), items = staged.filter((_, i) => !dups[i]), skipped = staged.filter((_, i) => dups[i]);
+  if (!items.length) { renderStaged(); return toast('Semua file sudah ada di perpustakaan'); }
   $('go').disabled = true;
-  const items = [...staged], failed = [];
+  const failed = [];
   for (const [n, x] of items.entries()) {
     $('go').textContent = `Mengunggah ${n + 1}/${items.length}…`;
     const f = x.f, safe = f.name.replace(/[^\w.\-]+/g, '_'), path = `${user.id}/${Date.now()}-${safe}`;
@@ -229,11 +253,12 @@ async function doUpload() {
     if (error) { await sb.storage.from('songs').remove([path]); toast(error.message); failed.push(x); continue; }
     songs.unshift(data); render();
   }
-  staged = failed; $('go').disabled = false; $('go').textContent = 'Unggah';
-  if (failed.length) { renderStaged(); toast(failed.length + ' file gagal diunggah'); }
+  staged = [...skipped, ...failed]; $('go').disabled = false; $('go').textContent = 'Unggah';
+  if (staged.length) { renderStaged(); toast(`${items.length - failed.length} diunggah, ${skipped.length} dilewati (sudah ada), ${failed.length} gagal`); }
   else { $('upd').close(); toast('Selesai'); }
 }
 async function delSong(id) {
+  if (view !== 'all') return;
   const s = songs.find(x => x.id === id);
   if (!confirm(`Hapus "${s.title}" secara permanen?`)) return;
   const r1 = await sb.storage.from('songs').remove([s.file_path]);
@@ -245,7 +270,30 @@ async function delSong(id) {
   if (curId === id) stopAll(true);
   render();
 }
- 
+
+/* ---------- Tambah lagu ke playlist (dari dalam tab playlist) ---------- */
+let addSel = new Set();
+function openAddSongs() {
+  const pl = playlists.find(p => p.id === view); if (!pl) return;
+  addSel = new Set();
+  const avail = songs.filter(s => !plMap[pl.id]?.has(s.id));
+  $('asn').textContent = pl.name;
+  $('asl').innerHTML = avail.length
+    ? avail.map(s => `<label class="arow"><input type="checkbox" onchange="toggleAdd('${s.id}',this.checked)"><span><b>${esc(s.title)}</b><small>${esc(s.artist || '')}</small></span></label>`).join('')
+    : '<p class="mute">Semua lagu sudah ada di playlist ini.</p>';
+  updAddBtn(); $('asd').showModal();
+}
+function toggleAdd(id, on) { on ? addSel.add(id) : addSel.delete(id); updAddBtn(); }
+function updAddBtn() { $('asgo').textContent = addSel.size ? `Tambahkan (${addSel.size})` : 'Tambahkan'; $('asgo').disabled = !addSel.size; }
+async function doAddSongs() {
+  const pid = view, ids = [...addSel]; if (!ids.length) return;
+  $('asgo').disabled = true;
+  const { error } = await sb.from('playlist_songs').insert(ids.map(song_id => ({ playlist_id: pid, song_id })));
+  if (error) { $('asgo').disabled = false; return toast(error.message); }
+  const set = (plMap[pid] ??= new Set()); ids.forEach(i => set.add(i));
+  $('asd').close(); render(); toast(ids.length + ' lagu ditambahkan');
+}
+
 /* ---------- Ubah judul & artis ---------- */
 let editId = null;
 function openEdit(id) {
@@ -258,6 +306,7 @@ async function saveEdit() {
   const title = $('etitle').value.trim(), artist = $('eartist').value.trim();
   $('etitle').classList.toggle('bad', !title); $('eartist').classList.toggle('bad', !artist);
   if (!title || !artist) return toast('Judul Lagu dan Penyanyi wajib diisi');
+  if (findDup(title, artist, editId)) return toast('Lagu dengan judul dan penyanyi yang sama sudah ada');
   const { error } = await sb.from('songs').update({ title, artist }).eq('id', editId);
   if (error) return toast(error.message);
   const s = songs.find(x => x.id === editId); s.title = title; s.artist = artist;
@@ -265,7 +314,7 @@ async function saveEdit() {
   $('edd').close(); render();
 }
 ['etitle', 'eartist'].forEach(id => $(id).onkeydown = e => { if (e.key === 'Enter') saveEdit(); });
- 
+
 /* ---------- Batas tidak aktif 5 jam ---------- */
 const IDLE_MS = 5 * 3600 * 1000, IDLE_KEY = 'musikku_last_active';
 let lastTouch = 0;
@@ -280,6 +329,7 @@ function checkIdle() {
 }
 setInterval(checkIdle, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkIdle(); });
- 
+
 setMode('login');
 sb.auth.getSession().then(({ data }) => { if (!data.session) showAuth(recovering ? 'login' : 'login'); });
+

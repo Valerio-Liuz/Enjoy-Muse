@@ -58,3 +58,21 @@ input.bad{border-color:#e5736b!important}
 .fld input:focus,.fld input:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(125,196,240,.4),0 0 14px rgba(125,196,240,.3)}
 .dact{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:640px){.body{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}aside button{width:auto;white-space:nowrap}}
+
+aside button{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.cnt{margin-left:auto;flex:none;color:var(--mute);font-size:11px;font-weight:400}
+.ghost{border:1px solid var(--line)}
+.btn:disabled{opacity:.5;cursor:default}
+.row select{width:58px}
+#asd{width:min(520px,94vw)}
+#asl{max-height:55vh;overflow:auto;margin:10px 0;border:1px solid var(--line);border-radius:10px}
+#asl p{margin:0;padding:14px}
+.arow{display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.arow:last-child{border-bottom:0}
+.arow:hover,.arow:has(input:checked){background:var(--bg)}
+.arow input{accent-color:var(--ac);width:18px;height:18px;flex:none;margin:0}
+.arow span{flex:1;min-width:0}
+.arow b,.arow small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow b{font-weight:600;font-size:14px}
+.arow small{color:var(--mute);font-size:12px}
+.dup{color:#e5736b;font-size:12px;margin:0 0 6px}

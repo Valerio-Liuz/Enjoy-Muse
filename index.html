@@ -29,8 +29,9 @@
     <main>
       <div class="bar">
         <h2 id="vt"></h2>
+        <button class="ghost" id="addsong" hidden onclick="openAddSongs()">＋ Tambah lagu</button>
         <button id="delpl" hidden onclick="delPlaylist()">Hapus playlist</button>
-        <button class="btn" onclick="openUpload()">Unggah lagu</button>
+        <button class="btn" id="upbtn" onclick="openUpload()">Unggah lagu</button>
       </div>
       <div id="list"></div>
     </main>
@@ -54,6 +55,11 @@
     <label class="fld" for="eartist">Penyanyi<input type="text" id="eartist" maxlength="80"></label>
   </div>
   <div class="dact"><button onclick="$('edd').close()">Batal</button><button class="btn" onclick="saveEdit()">Simpan</button></div>
+</dialog>
+<dialog id="asd">
+  <h3>Tambah ke “<span id="asn"></span>”</h3>
+  <div id="asl"></div>
+  <div class="dact"><button onclick="$('asd').close()">Batal</button><button class="btn" id="asgo" onclick="doAddSongs()">Tambahkan</button></div>
 </dialog>
 <dialog id="upd">
   <h3>Unggah lagu</h3>
