@@ -108,7 +108,7 @@ function render() {
       <button onclick="openEdit('${s.id}')" title="Ubah judul dan artis" aria-label="Ubah judul dan artis">✎</button>
       ${view === 'all' ? `<button onclick="delSong('${s.id}')" title="Hapus lagu" aria-label="Hapus lagu">🗑</button>` : ''}
     </div>`).join('')
-    : '<p style="color:var(--mute)">Belum ada lagu di sini. Unggah lagu atau tambahkan dari "Semua lagu".</p>';
+    : '<p style="color:var(--mute)">Belum ada lagu di sini.</p>';
 }
 function setView(v) { view = v; render(); }
 
