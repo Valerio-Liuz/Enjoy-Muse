@@ -123,7 +123,7 @@ async function play(list, i, startAt = 0, auto = true) {
   $('pbar').hidden = false;
   if (auto) au.play().catch(() => {});
   saveState(startAt);
-  $('np').textContent = s.title + (s.artist ? ' — ' + s.artist : '');
+  $('np').textContent = s.title + (s.artist ? ' - ' + s.artist : '');
   render();
 }
 function playFrom(i) { if (curId) hist.push(curId); queueView = view; play(visible(), i); }
